@@ -450,11 +450,11 @@ static int lcd_init (void *lcdbase)
 	console_row = 1;	/* leave 1 blank line below logo */
 #endif
 
-#ifdef CONFIG_LCD_NOT_ENABLED_AT_INIT
-	lcd_is_enabled = 0;
-#else
+//#ifdef CONFIG_LCD_NOT_ENABLED_AT_INIT
+//	lcd_is_enabled = 0;
+//#else
 	lcd_is_enabled = 1;
-#endif
+//#endif
 
 	return 0;
 }

@@ -423,6 +423,7 @@ static void power_off(void)
 extern int lcd_clear (cmd_tbl_t * cmdtp, int flag, int argc, char *argv[]);
 extern void lcd_enable(void);
 extern void bitmap_plot (int x, int y,uchar which);
+extern void lcd_puts(const char* s);
 extern void lcd_adjust_brightness(int level);
 extern void boxer_disable_panel(void);
 extern void boxer_init_panel(void);
@@ -680,35 +681,57 @@ static void Encore_boot(void)
     /*battery ok to boot*/
     if(cap_ok){
 		if (user_req) {
-			for (i = 0; i < FACTORY_RESET_LOOP; i++)
-			{
-				int ret;
-				unsigned char key;
-				
-				key = 0;
-				ret = tps65921_keypad_keys_pressed(&key);
-				if (!(key_pad & HOME_KEY)) {
-					user_req = 0;
-					printf("HOME_KEY held for less than %d Sec\n", FACTORY_RESET_DELAY);
-					break;
-				}
-					
-				if (!gpio_pin_read(14)) {
-					user_req = 0;
-					printf("POWER_KEY held for less than %d Sec\n", FACTORY_RESET_DELAY);					
-					break;
-				}
-				
-				if (((i+RESET_SECOND) % RESET_SECOND) == 0)
-				{
-					printf("Factory reset count = %d\n", i / RESET_SECOND);	
-				}
-				udelay(RESET_TICK);
-			}
-		}
-		if (user_req) {
-			  setenv("forcerecovery", "2");
-			  printf("Booting into Factory Reset Kernel\n");
+            int opt = 0, ret;
+            unsigned char key;
+
+            lcd_puts("Entering boot menu...\n");
+            udelay(2000*1000);
+
+            while(opt < 4)
+            {
+                lcd_clear(0,0,0,0);
+                lcd_puts("Boot options (Press Vol+/Vol- to change, Home to continue booting).\n\n\n");
+                switch(opt)
+                {
+                    case 0:
+                        lcd_puts("Current Selection: eMMC boot, normal\n");
+                        setenv("bootdevice", "eMMC");
+                        setenv("forcerecovery", "0");
+                        break;
+                    case 1:
+                        lcd_puts("Current Selection: eMMC boot, recovery\n");
+                        setenv("bootdevice", "eMMC");
+                        setenv("forcerecovery", "2");
+                        break;
+                    case 2:
+                        lcd_puts("Current Selection: SD boot, normal\n");
+                        setenv("bootdevice", "SD");
+                        setenv("forcerecovery", "0");
+                        break;
+                    case 3:
+                        lcd_puts("Current Selection: SD boot, recovery\n");
+                        setenv("bootdevice", "SD");
+                        setenv("forcerecovery", "2");
+                        break;
+                }
+                do
+                {
+                    key = 0;
+                    ret = tps65921_keypad_keys_pressed(&key);
+                    if(ret)
+                    {
+                        if(key & HOME_KEY) opt = 4;
+                        if(key & VOLUP_KEY) opt = (opt+1) % 4;
+                        if(key & VOLDN_KEY) opt = (opt-1) % 4;
+                        if(opt < 0) opt = 3;
+                    }
+                    udelay(RESET_TICK);
+                 } while(!ret);
+            }
+
+            lcd_puts("\n\nBooting selected option, please wait...");
+            //setenv("forcerecovery", "2");
+			//printf("Booting into Factory Reset Kernel\n");
 		}
 		else {
 			setenv("forcerecovery", "0");
