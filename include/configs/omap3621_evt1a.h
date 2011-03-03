@@ -268,6 +268,12 @@ setenv bootargs $commonbootargs;\
 mmcinit $mmcbootdev; fatload mmc $mmcbootdev 0x81c00000 uImage; fatload mmc $mmcbootdev 0x81f00000 uRamdisk; bootm 0x81c00000 0x81f00000" \
 	"\0" \
 \
+"altboot=\
+echo Booting into alternate mode;\
+setenv bootargs $commonbootargs;\
+mmcinit $mmcbootdev; fatload mmc $mmcbootdev 0x81c00000 uAltImg; fatload mmc $mmcbootdev 0x81f00000 uAltRam; bootm 0x81c00000 0x81f00000" \
+	"\0" \
+\
 "autodetectmmc=if itest.s ${bootdevice} -eq \"SD\"; then\
  setenv mmcbootdev 0;\
  setenv mmcromdev 0;\
@@ -275,7 +281,13 @@ else\
  setenv mmcbootdev 1;\
  setenv mmcromdev 1;\
 fi;\
-mmcinit $mmcbootdev"\
+mmcinit $mmcbootdev;\
+if itest ${customboot} -eq 0; then\
+ if fatload mmc $mmcbootdev 0x81c00000 u-boot.device 1; then \
+  setenvmem mmcbootdev 0x81c00000 1;\
+  setenvmem mmcromdev 0x81c00000 1;\
+ fi;\
+fi"\
 	"\0" \
 \
 "readtokens=if fatload mmc ${mmcromdev}:2 0x81c00000 devconf/DeviceID 100; then\
@@ -576,6 +588,7 @@ extern unsigned int boot_flash_type;
 #define CONFIG_LCD  1
 #define CONFIG_LCD_LOGO 1
 #define CONFIG_LCD_NOT_ENABLED_AT_INIT
+#define CFG_WHITE_ON_BLACK
 
 /* define early driver board init to allow board initialization after i2c*/
 #define CONFIG_DRV_BOARD_INIT 1

@@ -347,7 +347,10 @@ extern int max17042_soc( uint16_t* val );
 /****************************************************************************/
 
 #ifdef CONFIG_3621EVT1A
+#include <lcd.h>
 
+#define BOOT_MENU_VERSION_STRING \
+	"Das u-boot menu for Nook Color v0.3. Brought to you by: j4mm3r"
 
 #define CONVERT_X(v) 		#v
 #define CONVERT(v)		CONVERT_X(v)
@@ -569,7 +572,7 @@ static void Encore_boot(void)
 	if(cap_ok){
 		     /*since we have enough juice, we boost up the brightness*/
 		     lcd_adjust_brightness(80);
-		     bitmap_plot (1008,133,0);
+		     //bitmap_plot (1008,133,0);
 		     boot_normal = 1;
    }
    else{
@@ -667,7 +670,7 @@ static void Encore_boot(void)
        		lcd_adjust_brightness(80);
        		printf("re-enabling LCD-BL after usb charging!\n ");
        		lcd_clear(0,0,0,0);
-       		 bitmap_plot (1008,133,0);
+       		// bitmap_plot (1008,133,0);
        }
     }
        /*no charger and low battery*/
@@ -680,62 +683,145 @@ static void Encore_boot(void)
 	}
     /*battery ok to boot*/
     if(cap_ok){
+		int opt, ret;
+		unsigned char key;
+		char *dev_list[2] = {" eMMC ", " SD   "};
+		char *mode_list[3] = {" normal    ", " recovery  ", " alternate "};
+		int dev_idx = 0; int mode_idx = 0; int *idx;
+		user_req = 0;
+
+		lcd_clear(0,0,0,0);
+		lcd_puts("Press any key within 5 seconds for boot menu...\n");
+
+		for(opt=0; opt<50; opt++) { // Loop for 5 seconds
+			key = 0;
+			ret = tps65921_keypad_keys_pressed(&key);
+
+			if (key&HOME_KEY || key&VOLUP_KEY || key*VOLDN_KEY
+					|| gpio_pin_read(14)) {
+				user_req = 1;
+				break;
+			}
+			udelay(RESET_TICK);
+		}
+
 		if (user_req) {
-            int opt = 0, ret;
-            unsigned char key;
+			lcd_puts("Entering boot menu...\n");
+			udelay(2000*1000);
+			lcd_clear(0,0,0,0);
+			lcd_puts("Boot options\n");
+			lcd_puts("------------\n\n");
+			lcd_puts("Boot Device:\n"); // row 3
+			lcd_puts("Boot Mode  :\n"); // row 4
+			lcd_console_setpos(10, 0);
+			lcd_puts("Keys\n");
+			lcd_puts("-----\n\n");
+			lcd_puts("Press Vol- to change alternatives for highlighted option.\n");
+			lcd_puts("Press Home to move highlight to next option and continue.\n");
+			lcd_puts("Press Vol+ to move highlight to previous option.\n");
+			lcd_console_setpos(36, 0);
+			lcd_puts(BOOT_MENU_VERSION_STRING);
+			opt = 0;
+			idx = &dev_idx;
 
-            lcd_puts("Entering boot menu...\n");
-            udelay(2000*1000);
+			while(opt != 2)
+			{
+				if(idx == &dev_idx && opt == 0)
+					lcd_console_setcolor(CONSOLE_COLOR_BLACK, CONSOLE_COLOR_WHITE);
+				else
+					lcd_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
+				lcd_console_setpos(3, 12);
+				lcd_puts(dev_list[dev_idx]);
 
-            while(opt < 4)
-            {
-                lcd_clear(0,0,0,0);
-                lcd_puts("Boot options (Press Vol+/Vol- to change, Home to continue booting).\n\n\n");
-                switch(opt)
-                {
-                    case 0:
-                        lcd_puts("Current Selection: eMMC boot, normal\n");
-                        setenv("bootdevice", "eMMC");
-                        setenv("forcerecovery", "0");
-                        break;
-                    case 1:
-                        lcd_puts("Current Selection: eMMC boot, recovery\n");
-                        setenv("bootdevice", "eMMC");
-                        setenv("forcerecovery", "2");
-                        break;
-                    case 2:
-                        lcd_puts("Current Selection: SD boot, normal\n");
-                        setenv("bootdevice", "SD");
-                        setenv("forcerecovery", "0");
-                        break;
-                    case 3:
-                        lcd_puts("Current Selection: SD boot, recovery\n");
-                        setenv("bootdevice", "SD");
-                        setenv("forcerecovery", "2");
-                        break;
-                }
-                do
-                {
-                    key = 0;
-                    ret = tps65921_keypad_keys_pressed(&key);
-                    if(ret)
-                    {
-                        if(key & HOME_KEY) opt = 4;
-                        if(key & VOLUP_KEY) opt = (opt+1) % 4;
-                        if(key & VOLDN_KEY) opt = (opt-1) % 4;
-                        if(opt < 0) opt = 3;
-                    }
-                    udelay(RESET_TICK);
-                 } while(!ret);
-            }
+				if(idx == &mode_idx && opt == 0)
+					lcd_console_setcolor(CONSOLE_COLOR_BLACK, CONSOLE_COLOR_WHITE);
+				else
+					lcd_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
+				lcd_console_setpos(4, 12);
+				lcd_puts(mode_list[mode_idx]);
 
-            lcd_puts("\n\nBooting selected option, please wait...");
-            //setenv("forcerecovery", "2");
-			//printf("Booting into Factory Reset Kernel\n");
+				lcd_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
+				lcd_console_setpos(6, 0);
+				if(opt == 1)
+					lcd_puts("Press Home to boot now, Vol+ to go back to selection");
+				else
+					lcd_puts("                                                    ");
+
+				do
+				{
+					key = 0;
+					ret = tps65921_keypad_keys_pressed(&key);
+
+					if(ret)
+					{
+						udelay(RESET_TICK*5);
+						// When home is pressed then switch selection from device to mode
+						// if already at mode, then continue booting
+						if(key & HOME_KEY)
+						{
+							// opt == 1 means, its almost ready to boot.
+							if(opt == 1) opt = 2;
+
+							// since selection is already at mode, we need one more
+							// press to boot, opt == 1 displays the confirmation.
+							if(idx == &mode_idx && opt == 0)
+								opt = 1;
+
+							// Advance to mode selection
+							idx = &mode_idx;
+						}
+
+						// Vol- iterates thru alternatives
+						if(key & VOLDN_KEY && opt == 0)
+						{
+							if(idx == &dev_idx)
+								*idx = (*idx+1)%2;
+							else
+								*idx = (*idx+1)%3;
+						}
+
+						// Vol+ switches selection from mode to device
+						if(key & VOLUP_KEY)
+						{
+							if(idx == &mode_idx)
+								idx = &dev_idx;
+
+							// Bail before boot?
+							if(opt==1) opt = 0;
+						}
+					}
+					udelay(RESET_TICK);
+				} while(!ret);
+			}
+
+			lcd_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
+			lcd_console_setpos(6, 0);
+			lcd_puts("Booting selected option, please wait...             ");
+
+			// override u-boot.order if present
+			setenv("customboot", "1");
+
+			// Set the boot device
+			if(dev_idx == 0)
+				setenv("bootdevice", "eMMC");
+			else
+			setenv("bootdevice", "SD");
+
+			// If recovery is selected
+			if(mode_idx == 1)
+				setenv("forcerecovery", "2");
+			else
+				setenv("forcerecovery", "0");
+
+			// If alternate booting is required
+			if(mode_idx == 2)
+				setenv("bootvar", "altboot");
 		}
 		else {
 			setenv("forcerecovery", "0");
+			setenv("customboot", "0");
 			printf("Booting into Normal Kernel\n");
+			lcd_puts("\n\nBooting, please wait...");
 
 		     /* note: this does not currently over-write what is in the bcb.
 		      * Action on forcerecovery == 0 could read back the bcb and

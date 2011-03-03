@@ -193,6 +193,8 @@ void	lcd_disable	(void);
 void	lcd_putc	(const char c);
 void	lcd_puts	(const char *s);
 void	lcd_printf	(const char *fmt, ...);
+void    lcd_console_setpos  (short row, short col);
+void    lcd_console_setcolor(int fg, int bg);
 
 
 /************************************************************************/
@@ -291,7 +293,8 @@ void	lcd_printf	(const char *fmt, ...);
 /************************************************************************/
 /* ** CONSOLE DEFINITIONS & FUNCTIONS					*/
 /************************************************************************/
-#if defined(CONFIG_LCD_LOGO) && !defined(CONFIG_LCD_INFO_BELOW_LOGO)
+#if defined(CONFIG_LCD_LOGO) && !defined(CONFIG_LCD_INFO_BELOW_LOGO) \
+	&& !defined(CONFIG_3621EVT1A)
 # define CONSOLE_ROWS		((panel_info.vl_row-BMP_LOGO_HEIGHT_B) \
 					/ VIDEO_FONT_HEIGHT)
 #else

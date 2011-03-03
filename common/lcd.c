@@ -95,6 +95,11 @@ extern void lcd_setcolreg (ushort regno,
 extern void lcd_initcolregs (void);
 #endif
 
+#if LCD_BPP == LCD_COLOR16
+static uchar	pixel_size = 0;
+static uint		pixel_line_length = 0;
+#endif
+
 static int lcd_getbgcolor (void);
 static void lcd_setfgcolor (int color);
 static void lcd_setbgcolor (int color);
@@ -230,12 +235,55 @@ void lcd_puts (const char *s)
 	}
 }
 
+/*----------------------------------------------------------------------*/
+
+void lcd_console_setpos(short row, short col)
+{
+	console_row = (row>0)? ((row > CONSOLE_ROWS)? CONSOLE_ROWS:row):0;
+	console_col = (col>0)? ((col > CONSOLE_COLS)? CONSOLE_COLS:col):0;
+}
+
+/*----------------------------------------------------------------------*/
+
+void lcd_console_setcolor(int fg, int bg)
+{
+	lcd_color_fg = fg;
+	lcd_color_bg = bg;
+}
+
 /************************************************************************/
 /* ** Low-Level Graphics Routines					*/
 /************************************************************************/
 
 void lcd_drawchars (ushort x, ushort y, uchar *str, int count)
 {
+#if LCD_BPP == LCD_COLOR16
+	ushort *dest;
+	ushort row;
+
+	dest = (ushort *)lcd_base;
+	dest += y*pixel_line_length + x;
+
+    for (row=0;  row < VIDEO_FONT_HEIGHT;  ++row, dest += pixel_line_length)  {
+		uchar *s = str;
+		ushort *d = dest;
+		int i;
+
+		for (i=0; i<count; ++i) {
+			uchar c, bits;
+
+			c = *s++;
+			bits = video_fontdata[c * VIDEO_FONT_HEIGHT + row];
+
+			for (c=0; c<8; ++c) {
+				*d++ = (bits & 0x80) ?
+						lcd_color_fg : lcd_color_bg;
+				bits <<= 1;
+			}
+		}
+    }
+#else
+
 	uchar *dest;
 	ushort off, row;
 
@@ -269,25 +317,21 @@ void lcd_drawchars (ushort x, ushort y, uchar *str, int count)
 						lcd_color_fg : lcd_color_bg;
 				bits <<= 1;
 			}
-#elif LCD_BPP == LCD_COLOR16
-			for (c=0; c<16; ++c) {
-				*d++ = (bits & 0x80) ?
-						lcd_color_fg : lcd_color_bg;
-				bits <<= 1;
-			}
 #endif
 		}
 #if LCD_BPP == LCD_MONOCHROME
 		*d  = rest | (*d & ((1 << (8-off)) - 1));
 #endif
 	}
+#endif /* LCD_BPP == LCD_COLOR16 */
 }
 
 /*----------------------------------------------------------------------*/
 
 static inline void lcd_puts_xy (ushort x, ushort y, uchar *s)
 {
-#if defined(CONFIG_LCD_LOGO) && !defined(CONFIG_LCD_INFO_BELOW_LOGO)
+#if defined(CONFIG_LCD_LOGO) && !defined(CONFIG_LCD_INFO_BELOW_LOGO) \
+	&& !defined(CONFIG_3621EVT1A)
 	lcd_drawchars (x, y+BMP_LOGO_HEIGHT_B, s, strlen ((char *)s));
 #else
 	lcd_drawchars (x, y, s, strlen ((char *)s));
@@ -298,7 +342,8 @@ static inline void lcd_puts_xy (ushort x, ushort y, uchar *s)
 
 static inline void lcd_putc_xy (ushort x, ushort y, uchar c)
 {
-#if defined(CONFIG_LCD_LOGO) && !defined(CONFIG_LCD_INFO_BELOW_LOGO)
+#if defined(CONFIG_LCD_LOGO) && !defined(CONFIG_LCD_INFO_BELOW_LOGO) \
+	&& !defined(CONFIG_3621EVT1A)
 	lcd_drawchars (x, y+BMP_LOGO_HEIGHT_B, &c, 1);
 #else
 	lcd_drawchars (x, y, &c, 1);
@@ -379,7 +424,7 @@ int drv_lcd_init (void)
 /*----------------------------------------------------------------------*/
 int lcd_clear (cmd_tbl_t * cmdtp, int flag, int argc, char *argv[])
 {
- 
+	uchar c;
 #if LCD_BPP == LCD_MONOCHROME
 	/* Setting the palette */
 	lcd_initcolregs();
@@ -400,9 +445,11 @@ int lcd_clear (cmd_tbl_t * cmdtp, int flag, int argc, char *argv[])
 #ifndef CFG_WHITE_ON_BLACK
 	lcd_setfgcolor (CONSOLE_COLOR_BLACK);
 	lcd_setbgcolor (CONSOLE_COLOR_WHITE);
+	c = 0xff;
 #else
 	lcd_setfgcolor (CONSOLE_COLOR_WHITE);
 	lcd_setbgcolor (CONSOLE_COLOR_BLACK);
+	c = 0x00;
 #endif	/* CFG_WHITE_ON_BLACK */
 
 #ifdef	LCD_TEST_PATTERN
@@ -410,7 +457,7 @@ int lcd_clear (cmd_tbl_t * cmdtp, int flag, int argc, char *argv[])
 #else
 	/* set framebuffer to background color */
 	memset ((char *)lcd_base,
-		0,
+		c,
 		fb_size);
 
 #endif
@@ -444,17 +491,20 @@ static int lcd_init (void *lcdbase)
 #endif
 	/* Initialize the console */
 	console_col = 0;
+	lcd_console_address = lcd_base;
 #ifdef CONFIG_LCD_INFO_BELOW_LOGO
 	console_row = 7 + BMP_LOGO_HEIGHT / VIDEO_FONT_HEIGHT;
 #else
 	console_row = 1;	/* leave 1 blank line below logo */
 #endif
 
-//#ifdef CONFIG_LCD_NOT_ENABLED_AT_INIT
-//	lcd_is_enabled = 0;
-//#else
+#if LCD_BPP == LCD_COLOR16
+	pixel_size = NBITS(LCD_BPP)/8;
+	pixel_line_length = lcd_line_length/pixel_size;
+#endif
+
 	lcd_is_enabled = 1;
-//#endif
+
 
 	return 0;
 }
