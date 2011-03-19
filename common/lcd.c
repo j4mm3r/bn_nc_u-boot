@@ -117,6 +117,169 @@ static void lcd_getcolreg (ushort regno,
 static int lcd_getfgcolor (void);
 #endif	/* NOT_USED_SO_FAR */
 
+#ifdef CONFIG_3621EVT1A
+static uchar    c_orient, c_font_scale;
+static uchar    c_row, c_col, c_max_rows, c_max_cols;
+static ushort   c_color_fg, c_color_bg;
+static ushort   fb_max_x, fb_max_y;
+static ulong    fb_num_pixels;
+
+void bn_console_setcolor(ushort fg, ushort bg)
+{
+    c_color_fg = fg;
+    c_color_bg = bg;
+}
+
+void bn_console_clear()
+{
+    c_row = 0;
+    c_col = 0;
+    lcd_clear(0,0,0,0);
+}
+
+void bn_console_stat(bn_console_info_t *inf)
+{
+    if(inf)
+    {
+        inf->c_row = c_row;
+        inf->c_col = c_col;
+        inf->c_max_rows = c_max_rows;
+        inf->c_max_cols = c_max_cols;
+        inf->c_color_fg = c_color_fg;
+        inf->c_color_bg = c_color_bg;
+    }
+}
+
+void bn_console_init(uchar orientation, uchar scale, ushort fg, ushort bg)
+{
+    fb_max_x = panel_info.vl_col;
+    fb_max_y = panel_info.vl_row;
+    fb_num_pixels = fb_size/pixel_size;
+
+    c_orient = orientation;
+    c_font_scale = scale;
+
+    if(orientation == O_PORTRAIT)
+    {
+        c_max_cols = fb_max_y/(VIDEO_FONT_WIDTH*c_font_scale);
+        c_max_rows = fb_max_x/(VIDEO_FONT_HEIGHT*c_font_scale);
+    }
+    else
+    {
+        c_max_cols = fb_max_x/(VIDEO_FONT_WIDTH*c_font_scale);
+        c_max_rows = fb_max_y/(VIDEO_FONT_HEIGHT*c_font_scale);
+    }
+
+    // Since this is the only place where orientation and Font
+    // scale can be set, always clear screen
+    bn_console_setcolor(fg, bg);
+    bn_console_clear();
+}
+
+void bn_console_setpos(uchar row, uchar col)
+{
+    c_row = (row>0)? ((row>c_max_rows)? c_max_rows:row):0;
+    c_col = (col>0)? ((col>c_max_cols)? c_max_cols:col):0;
+}
+
+static inline void bn_console_newline(void)
+{
+    c_col = 0;
+    if(++c_row >= c_max_rows)
+        // No scrollup supported yet
+        c_row = 0;
+}
+
+static inline void bn_console_back(void)
+{
+    if(--c_col < 0)
+    {
+        c_col = c_max_cols-1;
+        if(--c_row < 0)
+            c_row = 0;
+    }
+}
+
+static inline void bn_console_setpixel(ushort x, ushort y, ushort c)
+{
+    ushort rx = (c_orient == O_PORTRAIT)? (y) : (x);
+    ushort ry = (c_orient == O_PORTRAIT)? (fb_max_y-x) : (y);
+    ushort *dest = ((ushort *)lcd_base) + rx + (ry*pixel_line_length);
+    *dest = c;
+}
+
+static void bn_console_drawchar(ushort x, ushort y, uchar c)
+{
+    LOG_CONSOLE("bn_console_drawchar: %c [%d, %d]\n", c, x, y);
+    ushort row, col, rx, ry, sy, sx;
+    for(row=0; row<VIDEO_FONT_HEIGHT; row++)
+    {
+        sy = y + (row*c_font_scale);
+        for(ry = sy; ry < (sy+c_font_scale); ry++)
+        {
+            uchar bits = video_fontdata[c*VIDEO_FONT_HEIGHT+row];
+            for(col=0; col<VIDEO_FONT_WIDTH; col++)
+            {
+                sx = x + (col*c_font_scale);
+                for(rx = sx; rx < (sx+c_font_scale); rx++)
+                {
+                    bn_console_setpixel(rx, ry,
+                        (bits & 0x80)? c_color_fg:c_color_bg);
+                }
+                bits <<= 1;
+            }
+        }
+    }
+}
+
+void bn_console_putc(const char c)
+{
+    switch (c) {
+    case '\r':	c_col = 0;
+                return;
+
+    case '\n':	bn_console_newline();
+                return;
+
+	case '\t':	/* Tab (8 chars alignment) */
+                c_col |=  8;
+                c_col &= ~7;
+
+                if (c_col >= c_max_cols) {
+                    bn_console_newline();
+                }
+                return;
+
+    case '\b':	bn_console_back();
+                return;
+
+	default:	bn_console_drawchar(c_col*c_font_scale*VIDEO_FONT_WIDTH,
+				                    c_row*c_font_scale*VIDEO_FONT_HEIGHT,
+                                    c);
+                if (++c_col >= c_max_cols)
+                    bn_console_newline();
+                return;
+    }
+    /* NOTREACHED */
+}
+
+void bn_console_puts(const char* s)
+{
+    while(*s)
+        bn_console_putc(*s++);
+}
+
+void bn_console_printf(const char* fmt, ...)
+{
+    char buf[256];
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(buf, fmt, args);
+    bn_console_puts(buf);
+    va_end(args);
+}
+#endif /* CONFIG_3621EVT1A */
+
 /************************************************************************/
 
 /*----------------------------------------------------------------------*/
@@ -249,6 +412,16 @@ void lcd_console_setcolor(int fg, int bg)
 {
 	lcd_color_fg = fg;
 	lcd_color_bg = bg;
+}
+
+void lcd_printf(const char* fmt, ...)
+{
+    char buf[256];
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(buf, fmt, args);
+    lcd_puts(buf);
+    va_end(args);
 }
 
 /************************************************************************/

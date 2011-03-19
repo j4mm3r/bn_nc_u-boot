@@ -196,6 +196,42 @@ void	lcd_printf	(const char *fmt, ...);
 void    lcd_console_setpos  (short row, short col);
 void    lcd_console_setcolor(int fg, int bg);
 
+#ifdef CONFIG_3621EVT1A
+#define O_LANDSCAPE   0
+#define O_PORTRAIT    1
+#define SCALE_DEFAULT 1
+#define SCALE_LARGE   2
+
+//#define CONSOLE_DEBUG_LOG
+#ifdef CONSOLE_DEBUG_LOG
+#define LOG_CONSOLE(fmt, list...) \
+    lcd_printf(fmt, ##list);
+#else
+#define LOG_CONSOLE(fmt, list...)
+#define LOG_CONSOLEX(x, fmt, list...) \
+    lcd_console_setpos(x, 50); \
+    lcd_printf(fmt, ##list); \
+    udelay(300*1000);
+#endif
+typedef struct bn_console_info
+{
+    ushort  c_row;
+    ushort  c_col;
+    ushort  c_max_rows;
+    ushort  c_max_cols;
+    ushort  c_color_fg;
+    ushort  c_color_bg;
+} bn_console_info_t;
+
+void bn_console_init(uchar orientation, uchar scale, ushort fg, ushort bg);
+void bn_console_clear(void);
+void bn_console_setcolor(ushort fg, ushort bg);
+void bn_console_setpos(uchar row, uchar col);
+void bn_console_putc(const char  c);
+void bn_console_puts(const char* s);
+void bn_console_printf(const char* fmt, ...);
+void bn_console_stat(bn_console_info_t *inf);
+#endif /* CONFIG_3621EVT1A */
 
 /************************************************************************/
 /* ** BITMAP DISPLAY SUPPORT						*/

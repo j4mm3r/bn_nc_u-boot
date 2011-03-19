@@ -350,7 +350,7 @@ extern int max17042_soc( uint16_t* val );
 #include <lcd.h>
 
 #define BOOT_MENU_VERSION_STRING \
-	"Das u-boot menu for Nook Color v0.3. Brought to you by: j4mm3r"
+	" Das u-boot menu for Nook Color v0.4. Brought to you by: j4mm3r"
 
 #define CONVERT_X(v) 		#v
 #define CONVERT(v)		CONVERT_X(v)
@@ -681,8 +681,9 @@ static void Encore_boot(void)
 		    power_off();
 	    }
 	}
-    /*battery ok to boot*/
-    if(cap_ok){
+
+	/*battery ok to boot*/
+	if(cap_ok){
 		int opt, ret;
 		unsigned char key;
 		char *dev_list[2] = {" eMMC ", " SD   "};
@@ -690,13 +691,14 @@ static void Encore_boot(void)
 		int dev_idx = 0; int mode_idx = 0; int *idx;
 		user_req = 0;
 
-		lcd_clear(0,0,0,0);
-		lcd_puts("Press any key within 5 seconds for boot menu...\n");
+		bn_console_init(O_PORTRAIT, SCALE_DEFAULT, CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
+		bn_console_puts(" Press any key within 5 second(s) for boot menu...\n");
 
 		for(opt=0; opt<50; opt++) { // Loop for 5 seconds
 			key = 0;
 			ret = tps65921_keypad_keys_pressed(&key);
-
+			bn_console_setpos(0, 22);
+			bn_console_printf("%d", 5-(opt/10));
 			if (key&HOME_KEY || key&VOLUP_KEY || key*VOLDN_KEY
 					|| gpio_pin_read(14)) {
 				user_req = 1;
@@ -706,46 +708,52 @@ static void Encore_boot(void)
 		}
 
 		if (user_req) {
-			lcd_puts("Entering boot menu...\n");
-			udelay(2000*1000);
-			lcd_clear(0,0,0,0);
-			lcd_puts("Boot options\n");
-			lcd_puts("------------\n\n");
-			lcd_puts("Boot Device:\n"); // row 3
-			lcd_puts("Boot Mode  :\n"); // row 4
-			lcd_console_setpos(10, 0);
-			lcd_puts("Keys\n");
-			lcd_puts("-----\n\n");
-			lcd_puts("Press Vol- to change alternatives for highlighted option.\n");
-			lcd_puts("Press Home to move highlight to next option and continue.\n");
-			lcd_puts("Press Vol+ to move highlight to previous option.\n");
-			lcd_console_setpos(36, 0);
-			lcd_puts(BOOT_MENU_VERSION_STRING);
+			bn_console_puts("\n Entering boot menu...\n");
+			for(opt=1; opt<10; opt++)
+			{
+				udelay(200*1000);
+				lcd_adjust_brightness(100-10*opt);
+			}
+			bn_console_clear();
+			udelay(500*1000);
+			lcd_adjust_brightness(80);
+			bn_console_puts(" Boot options\n");
+			bn_console_puts(" ------------\n\n");
+			bn_console_puts(" Boot Device:\n"); // row 3
+			bn_console_puts(" Boot Mode  :\n"); // row 4
+			bn_console_setpos(10, 0);
+			bn_console_puts(" Keys\n");
+			bn_console_puts(" -----\n\n");
+			bn_console_puts(" Home to change alternatives for highlighted option.\n");
+			bn_console_puts(" Vol- to move highlight to next option and continue.\n");
+			bn_console_puts(" Vol+ to move highlight to previous option.\n");
+			bn_console_setpos(30, 0);
+			bn_console_puts(BOOT_MENU_VERSION_STRING);
 			opt = 0;
 			idx = &dev_idx;
 
 			while(opt != 2)
 			{
 				if(idx == &dev_idx && opt == 0)
-					lcd_console_setcolor(CONSOLE_COLOR_BLACK, CONSOLE_COLOR_WHITE);
+					bn_console_setcolor(CONSOLE_COLOR_BLACK, CONSOLE_COLOR_WHITE);
 				else
-					lcd_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
-				lcd_console_setpos(3, 12);
-				lcd_puts(dev_list[dev_idx]);
+					bn_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
+				bn_console_setpos(3, 13);
+				bn_console_puts(dev_list[dev_idx]);
 
 				if(idx == &mode_idx && opt == 0)
-					lcd_console_setcolor(CONSOLE_COLOR_BLACK, CONSOLE_COLOR_WHITE);
+					bn_console_setcolor(CONSOLE_COLOR_BLACK, CONSOLE_COLOR_WHITE);
 				else
-					lcd_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
-				lcd_console_setpos(4, 12);
-				lcd_puts(mode_list[mode_idx]);
+					bn_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
+				bn_console_setpos(4, 13);
+				bn_console_puts(mode_list[mode_idx]);
 
-				lcd_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
-				lcd_console_setpos(6, 0);
+				bn_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
+				bn_console_setpos(6, 0);
 				if(opt == 1)
-					lcd_puts("Press Home to boot now, Vol+ to go back to selection");
+					bn_console_puts(" Press Vol- to boot now, Vol+ to go back to selection");
 				else
-					lcd_puts("                                                    ");
+					bn_console_puts("                                                     ");
 
 				do
 				{
@@ -757,7 +765,7 @@ static void Encore_boot(void)
 						udelay(RESET_TICK*5);
 						// When home is pressed then switch selection from device to mode
 						// if already at mode, then continue booting
-						if(key & HOME_KEY)
+						if(key & VOLDN_KEY)
 						{
 							// opt == 1 means, its almost ready to boot.
 							if(opt == 1) opt = 2;
@@ -772,7 +780,7 @@ static void Encore_boot(void)
 						}
 
 						// Vol- iterates thru alternatives
-						if(key & VOLDN_KEY && opt == 0)
+						if(key & HOME_KEY && opt == 0)
 						{
 							if(idx == &dev_idx)
 								*idx = (*idx+1)%2;
@@ -794,9 +802,9 @@ static void Encore_boot(void)
 				} while(!ret);
 			}
 
-			lcd_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
-			lcd_console_setpos(6, 0);
-			lcd_puts("Booting selected option, please wait...             ");
+			bn_console_setcolor(CONSOLE_COLOR_WHITE, CONSOLE_COLOR_BLACK);
+			bn_console_setpos(6, 0);
+			bn_console_puts(" Booting selected option, please wait...             ");
 
 			// override u-boot.order if present
 			setenv("customboot", "1");
@@ -821,14 +829,14 @@ static void Encore_boot(void)
 			setenv("forcerecovery", "0");
 			setenv("customboot", "0");
 			printf("Booting into Normal Kernel\n");
-			lcd_puts("\n\nBooting, please wait...");
+			bn_console_puts("\n\n Booting, please wait...");
 
 		     /* note: this does not currently over-write what is in the bcb.
 		      * Action on forcerecovery == 0 could read back the bcb and
 		      * clear it if it is currently 'recovery -- charging.zip, but
 		      * this will generally only happen in development when batteries
 		      * are swapped.  In this case it'll just boot into recovery and
-		      * reboot again into normal OS fairly quickly, so no special 
+		      * reboot again into normal OS fairly quickly, so no special
 		      * code to handle that case.
 		      */
 		}
